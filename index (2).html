@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GEMCOR — Inventory Master File</title>
+<style>
+  :root {
+    --bg:#f4f6fb; --card:#fff; --border:#e3e8ef; --text:#0f172a; --muted:#64748b;
+    --primary:#2563eb; --primary-dk:#1d4ed8; --success:#16a34a; --warning:#ea580c;
+    --danger:#dc2626; --chip:#eef2ff; --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); font-size:14px;
+  }
+  header {
+    background:linear-gradient(135deg,#0f172a,#1e293b); color:#fff; padding:18px 24px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  header h1 { margin:0; font-size:18px; font-weight:600; letter-spacing:.2px; }
+  header .sub { color:#94a3b8; font-size:12px; margin-top:2px; }
+  header button {
+    background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.2);
+    padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px;
+  }
+  header button:hover { background:rgba(255,255,255,.18); }
+
+  main { padding:20px 24px 60px; max-width:1600px; margin:0 auto; }
+
+  /* Stats */
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:18px; }
+  .stat {
+    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px;
+    box-shadow:var(--shadow);
+  }
+  .stat .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.6px; font-weight:600; }
+  .stat .value { font-size:22px; font-weight:700; margin-top:6px; }
+  .stat .sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .stat.good .value { color:var(--success); }
+  .stat.warn .value { color:var(--warning); }
+  .stat.bad  .value { color:var(--danger); }
+
+  /* Filters */
+  .filters {
+    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-bottom:14px;
+    box-shadow:var(--shadow);
+  }
+  .filters .field { display:flex; flex-direction:column; gap:4px; }
+  .filters label { font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+  .filters input, .filters select {
+    border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; outline:none;
+    background:#fff; color:var(--text);
+  }
+  .filters input:focus, .filters select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+  .search-field { grid-column: span 2; }
+  @media (max-width: 640px) { .search-field { grid-column: span 1; } }
+
+  .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px; flex-wrap:wrap; }
+  .toolbar .count { color:var(--muted); font-size:13px; }
+  .toolbar button {
+    background:var(--primary); color:#fff; border:none; padding:8px 14px; border-radius:8px;
+    cursor:pointer; font-size:13px; font-weight:500;
+  }
+  .toolbar button:hover { background:var(--primary-dk); }
+  .toolbar button.ghost { background:#fff; color:var(--text); border:1px solid var(--border); }
+
+  /* Table */
+  .table-wrap { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:auto; box-shadow:var(--shadow); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th {
+    position:sticky; top:0; background:#f8fafc; border-bottom:1px solid var(--border);
+    text-align:left; padding:10px 12px; font-size:11px; font-weight:700; color:#475569;
+    text-transform:uppercase; letter-spacing:.5px; cursor:pointer; white-space:nowrap; user-select:none;
+  }
+  thead th:hover { background:#eef2f7; }
+  thead th .arrow { color:var(--primary); margin-left:4px; font-size:10px; }
+  tbody td { padding:9px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  tbody tr:hover { background:#f8fafc; }
+  tbody tr.clickable { cursor:pointer; }
+  .id-cell { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:#334155; white-space:nowrap; }
+  .desc-cell { max-width:420px; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .badge {
+    display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap;
+  }
+  .b-instock { background:#dcfce7; color:#166534; }
+  .b-low { background:#ffedd5; color:#9a3412; }
+  .b-out { background:#fee2e2; color:#991b1b; }
+  .b-neg { background:#7f1d1d; color:#fff; }
+  .b-abc-a { background:#dbeafe; color:#1e40af; }
+  .b-abc-b { background:#e0e7ff; color:#3730a3; }
+  .b-abc-c { background:#f1f5f9; color:#475569; }
+  .b-cat { background:var(--chip); color:#3730a3; }
+
+  /* Pagination */
+  .pagination { display:flex; justify-content:center; align-items:center; gap:8px; padding:14px; flex-wrap:wrap; }
+  .pagination button {
+    background:#fff; border:1px solid var(--border); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px;
+  }
+  .pagination button:hover:not(:disabled) { background:#f1f5f9; }
+  .pagination button:disabled { opacity:.4; cursor:not-allowed; }
+  .pagination .page-info { color:var(--muted); font-size:13px; }
+
+  /* States */
+  .state { padding:60px 20px; text-align:center; color:var(--muted); }
+  .state.error { color:var(--danger); }
+  .spinner {
+    width:36px; height:36px; border:3px solid #e2e8f0; border-top-color:var(--primary);
+    border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 14px;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* Modal */
+  .modal-bg {
+    position:fixed; inset:0; background:rgba(15,23,42,.5); display:none; align-items:center;
+    justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-bg.open { display:flex; }
+  .modal {
+    background:#fff; border-radius:14px; max-width:720px; width:100%; max-height:85vh; overflow:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.3);
+  }
+  .modal h2 { margin:0; padding:16px 20px; border-bottom:1px solid var(--border); font-size:16px; }
+  .modal .body { padding:18px 20px; }
+  .modal .row { display:grid; grid-template-columns:180px 1fr; gap:10px; padding:6px 0; border-bottom:1px dashed #eef2f7; font-size:13px; }
+  .modal .row:last-child { border-bottom:none; }
+  .modal .row .k { color:var(--muted); font-weight:600; }
+  .modal .row .v { word-break:break-word; }
+  .modal .close { padding:12px 20px; border-top:1px solid var(--border); text-align:right; }
+  .modal .close button { background:var(--primary); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>GEMCOR — Inventory Master File</h1>
+    <div class="sub" id="lastUpdated">Live view from Google Sheets</div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button onclick="loadData()">↻ Refresh</button>
+    <button onclick="exportCSV()">↓ Export CSV</button>
+  </div>
+</header>
+
+<main>
+  <div class="stats" id="stats"></div>
+
+  <div class="filters">
+    <div class="field search-field">
+      <label>Search</label>
+      <input id="f-search" type="text" placeholder="ID, description, category, location…" />
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="f-category"><option value="">All</option></select>
+    </div>
+    <div class="field">
+      <label>Location</label>
+      <select id="f-location"><option value="">All</option></select>
+    </div>
+    <div class="field">
+      <label>Stock Status</label>
+      <select id="f-status">
+        <option value="">All</option>
+        <option value="instock">In Stock</option>
+        <option value="low">Low Stock (≤ ROP)</option>
+        <option value="out">Out of Stock</option>
+        <option value="negative">Negative Stock</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ABC Class</label>
+      <select id="f-abc">
+        <option value="">All</option>
+        <option>A</option><option>B</option><option>C</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Stock Classification</label>
+      <select id="f-class"><option value="">All</option></select>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="count" id="resultCount">Loading…</div>
+    <div style="display:flex; gap:8px;">
+      <button class="ghost" onclick="resetFilters()">Clear Filters</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <div class="state" id="state"></div>
+</main>
+
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modalTitle">Item Details</h2>
+    <div class="body" id="modalBody"></div>
+    <div class="close"><button onclick="closeModal()">Close</button></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — edit these two if your sheet changes
+   ============================================================ */
+const SHEET_ID   = "1gKHtUGI0Vgj_T5KBgIwpjTIq5IXvMsVWEBgHGnxDosI";
+const SHEET_NAME = "INVENTORYMASTERFILEV2";
+const PAGE_SIZE  = 50;
+
+/* ============================================================
+   Column map (0-based, matches header row on row 5 of the sheet)
+   ============================================================ */
+const COLS = {
+  id:0, desc:1, category:2, location:3, unit:4,
+  onHand:5, unitCost:6, onHandCost:7,
+  stockClass:8, abc:9, movement:10,
+  endingBal:11, actualCount:12, begBalCost:13, variance:14, varianceCost:15,
+  totalMRR:16, totalMRIF:17, mrs:18, ratio:19,
+  rop:20, forPO:21, poCost:22, buffer:23,
+  aveDaily:24, aveMonthly:25, activeMonths:26,
+  price:27, dateUpdated:28, poBasis:29
+};
+
+const HEADERS = [
+  { key:"id",            label:"Inventory ID" },
+  { key:"desc",          label:"Description" },
+  { key:"category",      label:"Category" },
+  { key:"location",      label:"Location" },
+  { key:"onHand",        label:"On Hand", num:true },
+  { key:"unitCost",      label:"Unit Cost", num:true, money:true },
+  { key:"onHandCost",    label:"On Hand Cost", num:true, money:true },
+  { key:"rop",           label:"ROP", num:true },
+  { key:"status",        label:"Status" },
+  { key:"abc",           label:"ABC" },
+  { key:"dateUpdated",   label:"Updated" }
+];
+
+/* ============================================================
+   State
+   ============================================================ */
+let RAW = [];       // all rows as objects
+let FILTERED = [];  // after filters
+let sortKey = "id", sortDir = "asc", page = 1;
+
+/* ============================================================
+   Fetch + parse
+   ============================================================ */
+async function loadData() {
+  showState("Loading data from Google Sheets…", "loading");
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&_=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}. Make sure the sheet is shared as "Anyone with the link".`);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(47).slice(0, -2));
+    RAW = parseGviz(json.table);
+    buildFilterOptions();
+    applyFilters();
+    document.getElementById("lastUpdated").textContent =
+      "Live view from Google Sheets · Updated " + new Date().toLocaleString();
+    hideState();
+  } catch (err) {
+    showState("Could not load the sheet: " + err.message, "error");
+  }
+}
+
+function parseGviz(table) {
+  if (!table || !table.rows) return [];
+  const rows = table.rows.map(r => (r.c || []).map(cellValue));
+  // Find header row containing "INVENTORY ID"
+  let headerIdx = rows.findIndex(r => String(r[0]||"").toUpperCase().trim() === "INVENTORY ID");
+  if (headerIdx < 0) headerIdx = 0;
+  const out = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const id = (r[COLS.id] || "").toString().trim();
+    if (!id) continue;                         // skip blank rows
+    if (id.toUpperCase() === "INVENTORY ID") continue;
+
+    const onHand   = num(r[COLS.onHand]);
+    const rop      = num(r[COLS.rop]);
+    const unitCost = num(r[COLS.unitCost]);
+    const onHandCost = num(r[COLS.onHandCost]) || (onHand * unitCost);
+
+    let status = "instock";
+    if (onHand < 0) status = "negative";
+    else if (onHand === 0) status = "out";
+    else if (rop > 0 && onHand <= rop) status = "low";
+
+    out.push({
+      id,
+      desc: str(r[COLS.desc]),
+      category: str(r[COLS.category]),
+      location: str(r[COLS.location]),
+      unit: str(r[COLS.unit]),
+      onHand, unitCost, onHandCost,
+      stockClass: str(r[COLS.stockClass]),
+      abc: str(r[COLS.abc]).toUpperCase().slice(0,1),
+      movement: str(r[COLS.movement]),
+      endingBal: num(r[COLS.endingBal]),
+      actualCount: num(r[COLS.actualCount]),
+      begBalCost: num(r[COLS.begBalCost]),
+      variance: num(r[COLS.variance]),
+      varianceCost: num(r[COLS.varianceCost]),
+      totalMRR: num(r[COLS.totalMRR]),
+      totalMRIF: num(r[COLS.totalMRIF]),
+      mrs: num(r[COLS.mrs]),
+      ratio: num(r[COLS.ratio]),
+      rop, forPO: num(r[COLS.forPO]), poCost: num(r[COLS.poCost]), buffer: num(r[COLS.buffer]),
+      aveDaily: num(r[COLS.aveDaily]), aveMonthly: num(r[COLS.aveMonthly]),
+      activeMonths: num(r[COLS.activeMonths]),
+      price: num(r[COLS.price]),
+      dateUpdated: str(r[COLS.dateUpdated]),
+      poBasis: str(r[COLS.poBasis]),
+      status
+    });
+  }
+  return out;
+}
+
+function cellValue(cell) {
+  if (!cell) return "";
+  if (cell.f != null) return cell.f;
+  if (cell.v == null) return "";
+  if (typeof cell.v === "string" && cell.v.startsWith("Date(")) {
+    const m = cell.v.match(/Date\((\d+),(\d+),(\d+)/);
+    if (m) return new Date(+m[1], +m[2], +m[3]).toLocaleDateString();
+  }
+  return cell.v;
+}
+function str(v){ return (v==null?"":String(v)).trim(); }
+function num(v){
+  if (v==null || v==="") return 0;
+  if (typeof v === "number") return v;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g,""));
+  return isNaN(n) ? 0 : n;
+}
+
+/* ============================================================
+   Filters + sort
+   ============================================================ */
+function buildFilterOptions() {
+  const cats = [...new Set(RAW.map(r=>r.category).filter(Boolean))].sort();
+  const locs = [...new Set(RAW.map(r=>r.location).filter(Boolean))].sort();
+  const clss = [...new Set(RAW.map(r=>r.stockClass).filter(Boolean))].sort();
+  fill("f-category", cats);
+  fill("f-location", locs);
+  fill("f-class", clss);
+}
+function fill(id, arr){
+  const sel = document.getElementById(id);
+  sel.innerHTML = '<option value="">All</option>' + arr.map(v=>`<option>${esc(v)}</option>`).join("");
+}
+
+function applyFilters(){
+  const q       = document.getElementById("f-search").value.trim().toLowerCase();
+  const cat     = document.getElementById("f-category").value;
+  const loc     = document.getElementById("f-location").value;
+  const status  = document.getElementById("f-status").value;
+  const abc     = document.getElementById("f-abc").value;
+  const cls     = document.getElementById("f-class").value;
+
+  FILTERED = RAW.filter(r => {
+    if (cat && r.category !== cat) return false;
+    if (loc && r.location !== loc) return false;
+    if (status && r.status !== status) return false;
+    if (abc && r.abc !== abc) return false;
+    if (cls && r.stockClass !== cls) return false;
+    if (q) {
+      const hay = (r.id + " " + r.desc + " " + r.category + " " + r.location + " " + r.stockClass).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  sortFiltered();
+  page = 1;
+  renderStats();
+  renderTable();
+  renderPagination();
+}
+
+function sortFiltered(){
+  const dir = sortDir === "asc" ? 1 : -1;
+  FILTERED.sort((a,b)=>{
+    let av = a[sortKey], bv = b[sortKey];
+    if (typeof av === "number" || typeof bv === "number") {
+      av = +av||0; bv = +bv||0;
+      return (av - bv) * dir;
+    }
+    av = String(av||"").toLowerCase();
+    bv = String(bv||"").toLowerCase();
+    return av < bv ? -1*dir : av > bv ? 1*dir : 0;
+  });
+}
+
+/* ============================================================
+   Stats
+   ============================================================ */
+function renderStats(){
+  const totalItems   = FILTERED.length;
+  const totalValue   = FILTERED.reduce((s,r)=>s + (r.onHandCost||0), 0);
+  const lowCount     = FILTERED.filter(r=>r.status==="low").length;
+  const outCount     = FILTERED.filter(r=>r.status==="out").length;
+  const negCount     = FILTERED.filter(r=>r.status==="negative").length;
+  const aItems       = FILTERED.filter(r=>r.abc==="A").length;
+
+  const money = n => "₱" + n.toLocaleString(undefined,{maximumFractionDigits:0});
+  document.getElementById("stats").innerHTML = `
+    <div class="stat"><div class="label">Items (filtered)</div><div class="value">${totalItems.toLocaleString()}</div><div class="sub">of ${RAW.length.toLocaleString()} total</div></div>
+    <div class="stat"><div class="label">Inventory Value</div><div class="value">${money(totalValue)}</div><div class="sub">On-hand cost</div></div>
+    <div class="stat warn"><div class="label">Low Stock</div><div class="value">${lowCount.toLocaleString()}</div><div class="sub">on hand ≤ ROP</div></div>
+    <div class="stat bad"><div class="label">Out of Stock</div><div class="value">${outCount.toLocaleString()}</div><div class="sub">zero on hand</div></div>
+    <div class="stat bad"><div class="label">Negative Stock</div><div class="value">${negCount.toLocaleString()}</div><div class="sub">data issues</div></div>
+    <div class="stat good"><div class="label">Class A Items</div><div class="value">${aItems.toLocaleString()}</div><div class="sub">high-value</div></div>
+  `;
+}
+
+/* ============================================================
+   Table
+   ============================================================ */
+function renderTable(){
+  // Head
+  const thead = document.getElementById("thead");
+  thead.innerHTML = HEADERS.map(h=>{
+    const arrow = sortKey===h.key ? `<span class="arrow">${sortDir==="asc"?"▲":"▼"}</span>` : "";
+    return `<th onclick="changeSort('${h.key}')">${h.label}${arrow}</th>`;
+  }).join("");
+
+  // Body
+  const start = (page-1)*PAGE_SIZE;
+  const slice = FILTERED.slice(start, start+PAGE_SIZE);
+  const tbody = document.getElementById("tbody");
+  if (!slice.length) {
+    tbody.innerHTML = `<tr><td colspan="${HEADERS.length}" style="text-align:center;padding:40px;color:#64748b;">No items match your filters.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = slice.map((r,i)=>{
+    const statusBadge = {
+      instock:  `<span class="badge b-instock">In Stock</span>`,
+      low:      `<span class="badge b-low">Low</span>`,
+      out:      `<span class="badge b-out">Out</span>`,
+      negative: `<span class="badge b-neg">Negative</span>`
+    }[r.status];
+    const abcBadge = r.abc ? `<span class="badge b-abc-${r.abc}">${esc(r.abc)}</span>` : "";
+    return `<tr class="clickable" onclick="openModal(${start+i})">
+      <td class="id-cell">${esc(r.id)}</td>
+      <td class="desc-cell">${esc(truncate(r.desc,90))}</td>
+      <td><span class="badge b-cat">${esc(r.category||"—")}</span></td>
+      <td>${esc(r.location||"—")}</td>
+      <td class="num">${fmtNum(r.onHand)}</td>
+      <td class="num">${fmtMoney(r.unitCost)}</td>
+      <td class="num">${fmtMoney(r.onHandCost)}</td>
+      <td class="num">${fmtNum(r.rop)}</td>
+      <td>${statusBadge}</td>
+      <td>${abcBadge}</td>
+      <td>${esc(r.dateUpdated||"—")}</td>
+    </tr>`;
+  }).join("");
+}
+
+function changeSort(key){
+  if (sortKey === key) sortDir = sortDir==="asc" ? "desc" : "asc";
+  else { sortKey = key; sortDir = "asc"; }
+  sortFiltered(); renderTable();
+}
+
+/* ============================================================
+   Pagination
+   ============================================================ */
+function renderPagination(){
+  const totalPages = Math.max(1, Math.ceil(FILTERED.length / PAGE_SIZE));
+  const el = document.getElementById("pagination");
+  document.getElementById("resultCount").textContent =
+    `${FILTERED.length.toLocaleString()} item(s) — page ${page} of ${totalPages}`;
+
+  const btn = (label, target, disabled=false, active=false) =>
+    `<button ${disabled?"disabled":""} style="${active?"background:#2563eb;color:#fff;border-color:#2563eb;":""}"
+      onclick="goPage(${target})">${label}</button>`;
+
+  const pages = [];
+  const win = 2;
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - page) <= win) pages.push(p);
+    else if (pages[pages.length-1] !== "…") pages.push("…");
+  }
+  el.innerHTML =
+    btn("‹ Prev", page-1, page===1) +
+    pages.map(p => p === "…"
+      ? `<span class="page-info">…</span>`
+      : btn(p, p, false, p===page)).join("") +
+    btn("Next ›", page+1, page===totalPages);
+}
+function goPage(p){
+  const total = Math.max(1, Math.ceil(FILTERED.length / PAGE_SIZE));
+  page = Math.min(Math.max(1, p), total);
+  renderTable(); renderPagination();
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+/* ============================================================
+   Modal
+   ============================================================ */
+function openModal(idx){
+  const r = FILTERED[idx];
+  if (!r) return;
+  document.getElementById("modalTitle").textContent = r.id;
+  const row = (k,v) => v!==""&&v!=null ? `<div class="row"><div class="k">${k}</div><div class="v">${v}</div></div>` : "";
+  document.getElementById("modalBody").innerHTML =
+    row("Description", esc(r.desc)) +
+    row("Category", esc(r.category)) +
+    row("Location", esc(r.location)) +
+    row("Base Unit", esc(r.unit)) +
+    row("On Hand", fmtNum(r.onHand)) +
+    row("Unit Cost", fmtMoney(r.unitCost)) +
+    row("On Hand Cost", fmtMoney(r.onHandCost)) +
+    row("Stock Classification", esc(r.stockClass)) +
+    row("ABC", r.abc) +
+    row("Inventory Movement", esc(r.movement)) +
+    row("Ending Balance", fmtNum(r.endingBal)) +
+    row("Actual Count", fmtNum(r.actualCount)) +
+    row("Variance", fmtNum(r.variance)) +
+    row("Variance Cost", fmtMoney(r.varianceCost)) +
+    row("Total MRR", fmtNum(r.totalMRR)) +
+    row("Total MRIF", fmtNum(r.totalMRIF)) +
+    row("MRS", fmtNum(r.mrs)) +
+    row("Re-order Point", fmtNum(r.rop)) +
+    row("For P.O", fmtNum(r.forPO)) +
+    row("P.O Cost", fmtMoney(r.poCost)) +
+    row("Buffer Stock", fmtNum(r.buffer)) +
+    row("Ave Daily Consumption", fmtNum(r.aveDaily)) +
+    row("Ave Monthly Consumption", fmtNum(r.aveMonthly)) +
+    row("Active Months", fmtNum(r.activeMonths)) +
+    row("Price", fmtMoney(r.price)) +
+    row("Date Updated", esc(r.dateUpdated)) +
+    row("PO No. Basis", esc(r.poBasis));
+  document.getElementById("modalBg").classList.add("open");
+}
+function closeModal(){ document.getElementById("modalBg").classList.remove("open"); }
+
+/* ============================================================
+   CSV export
+   ============================================================ */
+function exportCSV(){
+  const headers = HEADERS.map(h=>h.label);
+  const lines = [headers.join(",")];
+  FILTERED.forEach(r=>{
+    lines.push([
+      r.id, r.desc, r.category, r.location, r.onHand, r.unitCost, r.onHandCost,
+      r.rop, r.status, r.abc, r.dateUpdated
+    ].map(csvCell).join(","));
+  });
+  const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `inventory_master_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+function csvCell(v){
+  if (v == null) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function truncate(s,n){ s=String(s??""); return s.length>n ? s.slice(0,n-1)+"…" : s; }
+function fmtNum(n){ if(!n && n!==0) return ""; return Number(n).toLocaleString(); }
+function fmtMoney(n){ if(!n && n!==0) return ""; return "₱" + Number(n).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function showState(msg, type){
+  const el = document.getElementById("state");
+  el.className = "state " + (type==="error"?"error":"");
+  el.innerHTML = type==="loading" ? `<div class="spinner"></div>${msg}` : msg;
+  el.style.display = "block";
+}
+function hideState(){ document.getElementById("state").style.display = "none"; }
+function resetFilters(){
+  ["f-search","f-category","f-location","f-status","f-abc","f-class"].forEach(id=>document.getElementById(id).value="");
+  applyFilters();
+}
+
+/* ============================================================
+   Bind events + boot
+   ============================================================ */
+["f-search","f-category","f-location","f-status","f-abc","f-class"].forEach(id=>{
+  const el = document.getElementById(id);
+  const evt = id==="f-search" ? "input" : "change";
+  let t;
+  el.addEventListener(evt, ()=>{
+    clearTimeout(t);
+    t = setTimeout(applyFilters, id==="f-search" ? 250 : 0);
+  });
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
+
+loadData();
+</script>
+</body>
+</html>
